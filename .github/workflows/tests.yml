@@ -1,0 +1,51 @@
+name: Game tests
+on: [push, pull_request]
+jobs:
+  mysql-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: mafia
+          MYSQL_ROOT_HOST: '%'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-only-password"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config default-libmysqlclient-dev build-essential
+      - run: pip install -r requirements.txt
+      - name: Rules, API and real MySQL concurrency
+        env:
+          DJANGO_SECRET_KEY: ci-only-key-never-use-in-production-000000000000000000000000000000
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: '3306'
+          MYSQL_DATABASE: mafia
+          MYSQL_USER: root
+          MYSQL_PASSWORD: ci-only-password
+        run: |
+          python manage.py collectstatic --noinput
+          python manage.py test game
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/init_env.py
+      - run: docker compose config --quiet
+      - run: docker compose up -d --build --wait --wait-timeout 240
+      - run: |
+          curl --fail http://localhost:8080/healthz
+          curl --fail http://localhost:8080/ -o /tmp/home.html
+      - if: failure()
+        run: docker compose logs --no-color
+      - if: always()
+        run: docker compose down -v

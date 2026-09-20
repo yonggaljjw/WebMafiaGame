@@ -1,0 +1,8 @@
+# SQLite로 규칙/API만 공부할 때도 설치할 수 있는 공통 Python 의존성입니다.
+Django==5.2.17
+python-dotenv==1.2.3
+whitenoise==6.12.0
+gunicorn==23.0.0
+asgiref==3.12.1
+sqlparse==0.6.0
+packaging==26.3
