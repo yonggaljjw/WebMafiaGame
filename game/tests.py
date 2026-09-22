@@ -194,6 +194,13 @@ class EngineTests(SimpleTestCase):
         e.action(s,'3','chat',{'text':'ok'},102)
         with self.assertRaises(e.RuleError):e.action(s,'3','chat',{'text':'again'},102.2)
 
+    def test_chat_message_contains_sender_id_for_own_bubble(self):
+        # 프런트가 닉네임 문자열이 아니라 실제 참가자 ID로 '내 채팅'을 구분합니다.
+        s=state_of()
+        e.action(s,'3','chat',{'text':'내 메시지'},102)
+        self.assertEqual(s['messages'][-1]['sender_id'],'3')
+        self.assertEqual(e.snapshot(s,'3',103)['messages'][-1]['sender_id'],'3')
+
     def test_malformed_target_rejected(self):
         s=state_of();e.enter_phase(s,'vote',101)
         with self.assertRaises(e.RuleError):e.action(s,'3','vote',{'target':{},'epoch':s['epoch']},102)

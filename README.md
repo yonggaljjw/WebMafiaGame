@@ -108,12 +108,116 @@ HTTPS 리디렉션은 앞단 TLS 프록시에서 처리하고 앱의 `SECURE_SSL
 - 서버 장애: 진행 확인이 15초 넘게 끊기면 복구 후 무효 종료
 - 권한: CSRF, 서버 측 행동 검증, 참가자별 비밀 정보 필터링, 같은 방의 DB 행 잠금
 - 한국어 UI, 모바일 대응 CSS, 한글 코드 주석
+- 채팅 가독성: 내가 보낸 메시지는 오른쪽 말풍선, 다른 참가자는 왼쪽 말풍선으로 구분
 
 새 설정의 범위·밸런스 표·업데이트 방법은 [docs/SETTINGS.md](docs/SETTINGS.md)를 확인하세요.
 
 정확한 게임 규칙은 [docs/RULES.md](docs/RULES.md)에 정리했습니다.
 
-## 4. 기술 구성과 처리 흐름
+## 4. 프로젝트 디렉토리 구조
+
+Django의 역할을 학습하기 쉽도록 **View → Service → Domain** 책임을 분리했습니다.
+처음 코드를 볼 때는 아래 트리의 오른쪽 설명만 따라가도 전체 흐름을 파악할 수 있습니다.
+
+```text
+WebMafiaGame/
+├─ config/                         # Django 프로젝트 전역 설정
+│  ├─ settings.py                  # DB, 세션, CSRF, 정적 파일, 환경변수 설정
+│  ├─ urls.py                      # URL과 game View 연결
+│  └─ wsgi.py                      # Gunicorn이 Django를 실행할 때 사용하는 진입점
+│
+├─ game/                           # 마피아 게임 Django 앱
+│  ├─ domain/                      # [순수 Python] 게임 규칙 계층
+│  │  ├─ rules.py                  # 역할 밸런스, 시간 범위, 공통 규칙 검증
+│  │  ├─ state.py                  # 참가자/방 상태, 메시지 로그, 승패/이탈 상태
+│  │  ├─ phases.py                 # 낮→투표→밤 전환, 타이머, 단계 결과 처리
+│  │  ├─ actions.py                # ready/chat/vote/ability/leave/rematch 처리
+│  │  └─ snapshot.py               # 사용자별로 공개 가능한 정보만 필터링
+│  │
+│  ├─ services/                    # [Django ORM] 애플리케이션 서비스 계층
+│  │  └─ room_service.py           # 트랜잭션, select_for_update, 방 생성/입장/동기화
+│  │
+│  ├─ views/                       # [HTTP] 요청/응답 계층
+│  │  ├─ common.py                 # JSON 응답, 요청 본문, 세션, 공통 예외 처리
+│  │  ├─ pages.py                  # 메인 HTML 페이지 렌더링
+│  │  ├─ lobby.py                  # bootstrap, 방 목록, 방 생성 API
+│  │  ├─ room.py                   # 방 입장, sync, action API
+│  │  └─ health.py                 # DB 연결까지 확인하는 /healthz
+│  │
+│  ├─ management/commands/         # Django 사용자 정의 관리 명령
+│  │  └─ gameclock.py              # 브라우저 요청 없이 1초마다 게임 시간/이탈 검사
+│  │
+│  ├─ migrations/                  # Room/Guest DB 스키마 변경 이력
+│  ├─ static/game/                 # 브라우저 정적 파일
+│  │  ├─ app.js                    # 폴링, 이벤트, 렌더링, 채팅 UI
+│  │  └─ style.css                 # PC/모바일 화면과 좌/우 채팅 말풍선 스타일
+│  ├─ templates/game/              # Django HTML 템플릿
+│  │  └─ index.html                # 로비와 게임 화면의 HTML 뼈대
+│  ├─ engine.py                    # 기존 import 호환용 facade; 실제 구현은 domain/에 있음
+│  ├─ models.py                    # Room, Guest Django 모델
+│  └─ tests.py                     # 규칙, API, 보안, 동시 입장 회귀 테스트
+│
+├─ docs/                           # 규칙/설정/학습/검증 문서
+│  ├─ LEARNING.md                  # 코드 학습 순서와 설계 설명
+│  ├─ RULES.md                     # 실제 게임 규칙
+│  ├─ SETTINGS.md                  # 방 설정/밸런스 범위
+│  └─ VALIDATION.md                # 검증한 범위와 남은 제한
+│
+├─ deploy/                         # 외부 HTTP 진입점 설정
+│  └─ nginx.conf                   # Nginx 프록시와 요청 제한
+├─ scripts/                        # 로컬 초기화/테스트 보조 스크립트
+├─ .github/workflows/              # GitHub Actions CI
+├─ Dockerfile                      # Django/clock 공통 애플리케이션 이미지
+├─ docker-compose.yml              # MySQL, 웹, clock, Nginx 실행 구성
+├─ requirements-base.txt           # Django 등 공통 Python 패키지
+├─ requirements.txt                # 운영 MySQL 드라이버까지 포함한 의존성
+└─ README.md                       # 실행법, 구조, 운영 방법을 설명하는 현재 문서
+```
+
+### 요청 한 번이 처리되는 순서
+
+```text
+브라우저
+  ↓ HTTP JSON
+game/views/          요청 형식·세션 확인
+  ↓
+game/services/       transaction.atomic + Room 행 잠금
+  ↓
+game/domain/         실제 게임 규칙 계산
+  ↓
+snapshot.py          현재 사용자에게 공개할 정보만 선택
+  ↓
+JSON 응답 → app.js   화면/채팅 렌더링
+```
+
+`game/engine.py`는 리팩토링 전의 `from game import engine` 코드를 깨지 않기 위한 **호환 창구**입니다.
+새 기능을 추가할 때는 기능 성격에 맞게 `domain/`, `services/`, `views/` 중 알맞은 위치에 구현하는 방식을 권장합니다.
+
+### 폴더별 학습 README
+
+이번 버전에서는 루트 README만 보는 방식이 아니라, **`.git`을 제외한 모든 하위 폴더에 학습용 `README.md`를 배치**했습니다. 코드를 읽다가 특정 폴더의 목적이 헷갈리면 해당 폴더의 README부터 확인하면 됩니다.
+
+특히 처음에는 아래 순서가 이해하기 쉽습니다.
+
+```text
+config/README.md                 Django 프로젝트 설정과 URL
+game/README.md                   game 앱 전체 구조
+game/views/README.md             HTTP 요청/응답
+game/services/README.md          ORM·트랜잭션·행 잠금
+game/domain/README.md            실제 게임 규칙
+game/static/game/README.md       브라우저 JS·CSS와 채팅 UI
+game/templates/game/README.md    HTML 뼈대
+game/management/commands/README.md  서버 게임 시계
+game/migrations/README.md        DB 스키마 변경 이력
+docs/README.md                   문서 읽는 순서
+deploy/README.md                 Nginx 프록시
+scripts/README.md                초기화·테스트 자동화
+.github/workflows/README.md       GitHub Actions CI
+```
+
+각 README에는 단순 파일 목록뿐 아니라 **왜 이 계층이 필요한지, 주요 처리 흐름, 새 기능을 추가할 때 수정할 위치, 학습 포인트**를 함께 적었습니다.
+
+## 5. 기술 구성과 처리 흐름
 
 | 구성 | 역할 |
 | --- | --- |
@@ -131,21 +235,22 @@ HTTPS 리디렉션은 앞단 TLS 프록시에서 처리하고 앱의 `SECURE_SSL
 서버·전기·인터넷 사용 자체의 비용까지 무료로 보장하는 의미는 아닙니다.
 
 익명 세션을 확인한 요청만 해당 방을 잠그고 상태를 변경합니다.
-`game/engine.py`가 게임 규칙을 계산하고, `snapshot()`이 그 사람에게 공개할 정보만 만듭니다.
+`game/domain/`이 게임 규칙을 계산하고, `domain/snapshot.py`가 그 사람에게 공개할 정보만 만듭니다. `game/engine.py`는 기존 import 호환을 위한 facade입니다.
 브라우저가 임의의 역할·승리·공격 결과를 전송해도 서버는 받아들이지 않습니다.
 
-## 5. 학습 순서
+## 6. 학습 순서
 
 1. [docs/LEARNING.md](docs/LEARNING.md)로 전체 흐름을 먼저 읽습니다.
-2. `game/engine.py`: 역할·투표·밤 행동·승리 판정
-3. `game/models.py`: 방 상태 JSON과 세션 참가자 관계
-4. `game/views.py`: 입력 → 권한 → 트랜잭션 → 규칙 → 응답
-5. `game/management/commands/gameclock.py`: 브라우저가 없어도 동작하는 게임 시계
-6. `game/static/game/app.js`: 요청, 폴링, 참가자별 공개 상태 렌더링
-7. `config/settings.py`, `docker-compose.yml`: 환경변수와 실행 구성
-8. `game/tests.py`: 규칙·정보 노출·연결·HTTP·MySQL 동시 입장 테스트
+2. `game/views/`: HTTP 요청·응답과 입력 검증
+3. `game/services/room_service.py`: ORM·트랜잭션·행 잠금
+4. `game/domain/`: 역할·투표·밤 행동·승리 판정 등 순수 게임 규칙
+5. `game/models.py`: 방 상태 JSON과 익명 참가자 관계
+6. `game/management/commands/gameclock.py`: 브라우저가 없어도 동작하는 게임 시계
+7. `game/static/game/app.js`: 요청, 폴링, 참가자별 공개 상태와 좌/우 채팅 렌더링
+8. `config/settings.py`, `docker-compose.yml`: 환경변수와 실행 구성
+9. `game/tests.py`: 규칙·정보 노출·연결·HTTP·MySQL 동시 입장 테스트
 
-## 6. 테스트
+## 7. 테스트
 
 ### Docker 없이 핵심 규칙/API 테스트
 
@@ -181,7 +286,7 @@ MySQL 전용 동시 입장 테스트는 SQLite에서 명시적으로 건너뜁�
 6. 유예 안에 복귀했을 때 자신의 역할과 방이 유지되는지 확인합니다.
 7. 방장 퇴장, 승리 후 역할 공개, 재경기를 확인합니다.
 
-## 7. 범위와 운영상 제한
+## 8. 범위와 운영상 제한
 
 - 소규모 익명 게임의 학습용 기본 구현입니다. 대규모 서비스의 부하·장애 복구·보안 감사를 완료한 제품은 아닙니다.
 - 같은 브라우저 프로필의 여러 탭은 같은 사람입니다. 익명 가입 구조상 다중 기기로 여러 자리를 차지하는 행위를 완전히 막지 않습니다.

@@ -4,7 +4,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections, transaction
 from game.models import Room
-from game.views import tick_room, save_room
+from game.services.room_service import tick_room, save_room
 
 class Command(BaseCommand):
     help = '1초마다 진행 중인 방을 점검합니다. Ctrl+C로 종료합니다.'

@@ -2,7 +2,7 @@
 
 ## 1. 전체 흐름
 
-`브라우저 → views.py → DB 잠금 → engine.py → snapshot() → 브라우저`
+`브라우저 → views/ → services/ → DB 잠금 → domain/ → snapshot() → 브라우저`
 
 브라우저는 “누구에게 투표하겠다”는 의사만 전달합니다.
 서버가 실제 참가자인지, 살아 있는지, 지금 투표 시간인지 검사한 후 선택을 저장합니다.
@@ -17,8 +17,14 @@
 | `config/urls.py` | URL과 함수의 연결 |
 | `game/models.py` | Room, Guest 모델 |
 | `game/migrations/0001_initial.py` | 테이블 생성 이력 |
-| `game/engine.py` | 웹 프레임워크와 분리한 규칙 |
-| `game/views.py` | 요청 검증, 세션, 트랜잭션, 직렬화 |
+| `game/domain/rules.py` | 역할 밸런스, 입력 가능한 시간 등 고정 규칙 |
+| `game/domain/state.py` | Room.state 구조, 참가자, 메시지, 승패/이탈 |
+| `game/domain/phases.py` | 낮·투표·밤 단계 진행과 서버 타이머 |
+| `game/domain/actions.py` | 채팅·준비·투표·밤 능력 등 사용자 행동 |
+| `game/domain/snapshot.py` | 참가자별 비밀 정보 필터링 |
+| `game/engine.py` | 예전 import 경로를 유지하는 domain facade |
+| `game/services/room_service.py` | ORM, 트랜잭션, select_for_update, 방 상태 저장 |
+| `game/views/` | HTTP 입력 검증, 세션 확인, JSON 응답 |
 | `game/management/commands/gameclock.py` | 요청이 없어도 실행하는 주기 작업 |
 | `game/templates/game/index.html` | 화면 뼈대 |
 | `game/static/game/app.js` | 동기화, 이벤트, 안전한 DOM 렌더링 |
@@ -102,10 +108,10 @@ gameclock은 브라우저가 모두 닫혀도 DB를 검사합니다.
 - poll(): 이전 요청이 끝난 뒤 다음 동기화 예약
 - act(): 채팅/준비/투표/능력/나가기
 - render(): 서버 공개 상태로 화면 갱신
-- renderMessages(): 신규 메시지만 DOM에 추가
+- renderMessages(): 신규 메시지만 DOM에 추가하고, sender_id가 내 ID면 오른쪽 말풍선으로 표시
 - renderActions(): 선택 가능한 대상과 본인 선택 표시
 
-닉네임/채팅은 textContent로 넣어 HTML로 실행되지 않게 합니다.
+닉네임/채팅은 textContent로 넣어 HTML로 실행되지 않게 합니다. 채팅 메시지에는 sender_id를 저장해 내 메시지를 오른쪽에, 다른 참가자 메시지를 왼쪽에 표시합니다.
 서버 시각이 더 오래된 응답은 무시해 예전 폴링 응답이 최신 화면을 덮지 않게 합니다.
 
 ## 9. API

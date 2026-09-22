@@ -1,83 +1,379 @@
 {% load static %}
 <!doctype html>
 <html lang="ko">
-<head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101019">
-  <meta name="description" content="친구들과 닉네임만으로 시작하는 실시간 웹 마피아 게임">
-  <title>MIDNIGHT — 마피아 게임</title>
-  <link rel="stylesheet" href="{% static 'game/style.css' %}">
-  <script src="{% static 'game/app.js' %}" defer></script>
-</head>
-<body>
-<header class="topbar">
-  <a class="brand" href="/" aria-label="미드나이트 로비"><span class="brand-icon">M</span> MIDNIGHT<span class="brand-sub">마피아</span></a>
-  <div class="top-actions"><span id="network" role="status">연결 중</span><button id="rules-open" class="button subtle">게임 규칙</button></div>
-</header>
-<main>
-  <div id="notice" class="notice" role="alert" hidden></div>
-  <section id="lobby" hidden>
-    <div class="page-title"><div><p class="eyebrow">THE CITY NEVER SLEEPS</p><h1>오늘 밤, 누구를 믿을까?</h1><p class="muted">닉네임 하나로 입장. 대화 속에서 마피아를 찾아내세요.</p></div><span class="pill">4–12인 · 무료 · 가입 없음</span></div>
-    <div class="lobby-grid">
-      <aside class="panel setup">
-        <h2><span class="section-num">01</span> 나의 이름</h2>
-        <label for="nickname">닉네임</label><input id="nickname" maxlength="12" placeholder="도시에서 사용할 이름" autocomplete="nickname">
-        <p class="hint">같은 브라우저 프로필은 같은 참가자입니다. 여러 명 테스트 시 다른 브라우저·기기를 사용하세요.</p>
-        <div class="divider"></div>
-        <h2><span class="section-num">02</span> 새 방 만들기</h2>
-        <form id="create-form">
-          <label for="room-title">방 이름</label><input id="room-title" maxlength="40" required value="한밤의 추리 모임">
-          <label for="capacity">시작 인원 · 방 정원</label><select id="capacity"><option>4</option><option>5</option><option>6</option><option>7</option><option selected>8</option><option>9</option><option>10</option><option>11</option><option>12</option></select>
-          <p class="hint">설정한 인원이 모두 모이면 시작합니다. 역할 합계가 시작 인원과 같아야 합니다.</p>
-          <fieldset class="settings-fields"><legend>역할 구성</legend><div class="role-settings">
-            <div><label for="role-mafia">마피아</label><input id="role-mafia" type="number" min="1" step="1" required></div>
-            <div><label for="role-police">경찰</label><input id="role-police" type="number" min="0" step="1" required></div>
-            <div><label for="role-doctor">의사</label><input id="role-doctor" type="number" min="0" step="1" required></div>
-            <div><label for="role-citizen">일반 시민</label><input id="role-citizen" type="number" min="1" step="1" required></div>
-          </div><p id="balance-help" class="hint"></p><p id="settings-status" class="hint" role="status"></p><button id="reset-roles" class="button secondary" type="button">권장 구성으로 맞추기</button></fieldset>
-          <fieldset class="settings-fields"><legend>단계별 시간 · 초</legend><div class="time-settings">
-            <div><label for="day-seconds">낮 토론</label><input id="day-seconds" type="number" min="30" max="300" step="1" value="90" required></div>
-            <div><label for="vote-seconds">투표</label><input id="vote-seconds" type="number" min="15" max="120" step="1" value="30" required></div>
-            <div><label for="night-seconds">밤 행동</label><input id="night-seconds" type="number" min="15" max="120" step="1" value="30" required></div>
-          </div><p class="hint">토론 30~300초 · 투표/밤 15~120초</p></fieldset>
-          <button id="create-submit" class="button primary full" type="submit" disabled>방 만들기 <span>＋</span></button>
-        </form>
-      </aside>
-      <div class="rooms-area">
-        <div class="section-heading"><h2>참여할 수 있는 방 <span id="room-count" class="count">0</span></h2><button id="refresh" class="button subtle">새로고침</button></div>
-        <form id="join-form" class="join-code"><label for="room-code" class="sr-only">초대 코드</label><input id="room-code" maxlength="8" minlength="8" required placeholder="친구에게 받은 8자리 초대 코드"><button type="submit" class="button secondary">코드로 입장</button></form>
-        <div id="room-list" class="room-list" aria-live="polite"></div>
-        <div class="role-intro"><div><b class="mafia-color">마피아</b><p>밤에 동료와 공격 대상을 결정합니다.</p></div><div><b class="doctor-color">의사</b><p>밤마다 한 명을 보호합니다.</p></div><div><b class="police-color">경찰</b><p>한 명의 마피아 여부를 조사합니다.</p></div><div><b>시민</b><p>대화와 투표로 도시를 지킵니다.</p></div></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101019" />
+    <meta
+      name="description"
+      content="친구들과 닉네임만으로 시작하는 실시간 웹 마피아 게임"
+    />
+    <title>MIDNIGHT — 마피아 게임</title>
+    <link rel="stylesheet" href="{% static 'game/style.css' %}" />
+    <script src="{% static 'game/app.js' %}" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="미드나이트 로비"
+        ><span class="brand-icon">M</span> MIDNIGHT<span class="brand-sub"
+          >마피아</span
+        ></a
+      >
+      <div class="top-actions">
+        <span id="network" role="status">연결 중</span
+        ><button id="rules-open" class="button subtle">게임 규칙</button>
       </div>
-    </div>
-  </section>
-  <section id="game" hidden>
-    <div class="room-heading"><div><p class="eyebrow" id="room-code-label"></p><h1 id="game-title"></h1></div><div class="room-actions"><button id="invite" class="button secondary">초대 링크 복사</button><button id="leave" class="button subtle danger">나가기</button></div></div>
-    <div id="pause-banner" class="pause-banner" role="status" hidden>참가자의 재접속을 기다리고 있습니다. 게임 시간이 일시정지됩니다.</div>
-    <div id="result" class="result" hidden><p class="eyebrow">GAME OVER</p><h2 id="result-title"></h2><p id="result-text"></p></div>
-    <section class="panel room-settings-panel"><h2>이 방의 설정</h2><p id="room-settings-summary"></p></section>
-    <div class="game-grid">
-      <aside class="panel roster-panel"><div class="section-heading"><h2>참가자</h2><span id="player-count" class="count"></span></div><div id="roster"></div><p class="hint">사망한 참가자의 역할은 게임 종료 후 공개됩니다.</p></aside>
-      <section class="panel chat-panel">
-        <div class="phase-header"><div><p id="round-label" class="eyebrow">게임 대기실</p><h2 id="phase-label">참가자를 기다리는 중</h2></div><div id="timer" class="timer">—</div></div>
-        <div class="phase-track"><span data-phase="day">01 낮 토론</span><span data-phase="vote">02 투표</span><span data-phase="night">03 밤 행동</span></div>
-        <div class="chat-caption"><b id="channel-name">대기실 채팅</b><span id="chat-permission" class="muted"></span></div>
-        <div id="messages" class="messages" role="log" aria-label="게임 채팅" aria-live="polite" aria-relevant="additions"></div>
-        <form id="chat-form" class="chat-form"><label class="sr-only" for="message">메시지</label><input id="message" maxlength="300" autocomplete="off" placeholder="대화를 시작해 보세요"><button id="send" class="button primary" type="submit">전송</button></form>
+    </header>
+    <main>
+      <div id="notice" class="notice" role="alert" hidden></div>
+      <section id="lobby" hidden>
+        <div class="page-title">
+          <div>
+            <p class="eyebrow">THE CITY NEVER SLEEPS</p>
+            <h1>오늘 밤, 누구를 믿을까?</h1>
+            <p class="muted">
+              닉네임 하나로 입장. 대화 속에서 마피아를 찾아내세요.
+            </p>
+          </div>
+          <span class="pill">4–12인 · 무료 · 가입 없음</span>
+        </div>
+        <div class="lobby-grid">
+          <aside class="panel setup">
+            <h2><span class="section-num">01</span> 나의 이름</h2>
+            <label for="nickname">닉네임</label
+            ><input
+              id="nickname"
+              maxlength="12"
+              placeholder="도시에서 사용할 이름"
+              autocomplete="nickname"
+            />
+            <p class="hint">
+              같은 브라우저 프로필은 같은 참가자입니다. 여러 명 테스트 시 다른
+              브라우저·기기를 사용하세요.
+            </p>
+            <div class="divider"></div>
+            <h2><span class="section-num">02</span> 새 방 만들기</h2>
+            <form id="create-form">
+              <label for="room-title">방 이름</label
+              ><input
+                id="room-title"
+                maxlength="40"
+                required
+                value="한밤의 추리 모임"
+              />
+              <label for="capacity">시작 인원 · 방 정원</label
+              ><select id="capacity">
+                <option>4</option>
+                <option>5</option>
+                <option>6</option>
+                <option>7</option>
+                <option selected>8</option>
+                <option>9</option>
+                <option>10</option>
+                <option>11</option>
+                <option>12</option>
+              </select>
+              <p class="hint">
+                설정한 인원이 모두 모이면 시작합니다. 역할 합계가 시작 인원과
+                같아야 합니다.
+              </p>
+              <fieldset class="settings-fields">
+                <legend>역할 구성</legend>
+                <div class="role-settings">
+                  <div>
+                    <label for="role-mafia">마피아</label
+                    ><input
+                      id="role-mafia"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label for="role-police">경찰</label
+                    ><input
+                      id="role-police"
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label for="role-doctor">의사</label
+                    ><input
+                      id="role-doctor"
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label for="role-citizen">일반 시민</label
+                    ><input
+                      id="role-citizen"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                    />
+                  </div>
+                </div>
+                <p id="balance-help" class="hint"></p>
+                <p id="settings-status" class="hint" role="status"></p>
+                <button id="reset-roles" class="button secondary" type="button">
+                  권장 구성으로 맞추기
+                </button>
+              </fieldset>
+              <fieldset class="settings-fields">
+                <legend>단계별 시간 · 초</legend>
+                <div class="time-settings">
+                  <div>
+                    <label for="day-seconds">낮 토론</label
+                    ><input
+                      id="day-seconds"
+                      type="number"
+                      min="30"
+                      max="300"
+                      step="1"
+                      value="90"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label for="vote-seconds">투표</label
+                    ><input
+                      id="vote-seconds"
+                      type="number"
+                      min="15"
+                      max="120"
+                      step="1"
+                      value="30"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label for="night-seconds">밤 행동</label
+                    ><input
+                      id="night-seconds"
+                      type="number"
+                      min="15"
+                      max="120"
+                      step="1"
+                      value="30"
+                      required
+                    />
+                  </div>
+                </div>
+                <p class="hint">토론 30~300초 · 투표/밤 15~120초</p>
+              </fieldset>
+              <button
+                id="create-submit"
+                class="button primary full"
+                type="submit"
+                disabled
+              >
+                방 만들기 <span>＋</span>
+              </button>
+            </form>
+          </aside>
+          <div class="rooms-area">
+            <div class="section-heading">
+              <h2>
+                참여할 수 있는 방 <span id="room-count" class="count">0</span>
+              </h2>
+              <button id="refresh" class="button subtle">새로고침</button>
+            </div>
+            <form id="join-form" class="join-code">
+              <label for="room-code" class="sr-only">초대 코드</label
+              ><input
+                id="room-code"
+                maxlength="8"
+                minlength="8"
+                required
+                placeholder="친구에게 받은 8자리 초대 코드"
+              /><button type="submit" class="button secondary">
+                코드로 입장
+              </button>
+            </form>
+            <div id="room-list" class="room-list" aria-live="polite"></div>
+            <div class="role-intro">
+              <div>
+                <b class="mafia-color">마피아</b>
+                <p>밤에 동료와 공격 대상을 결정합니다.</p>
+              </div>
+              <div>
+                <b class="doctor-color">의사</b>
+                <p>밤마다 한 명을 보호합니다.</p>
+              </div>
+              <div>
+                <b class="police-color">경찰</b>
+                <p>한 명의 마피아 여부를 조사합니다.</p>
+              </div>
+              <div>
+                <b>시민</b>
+                <p>대화와 투표로 도시를 지킵니다.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
-      <aside class="right-column">
-        <section id="role-card" class="panel role-card"><p class="eyebrow">YOUR IDENTITY</p><h2 id="my-role">역할 배정 전</h2><p id="role-description"></p></section>
-        <section class="panel action-panel"><h2 id="action-title">게임 준비</h2><p id="action-help" class="muted"></p><div id="targets"></div><div id="room-controls"></div></section>
-        <section id="reports-panel" class="panel" hidden><h2>나의 수사 기록</h2><div id="reports"></div></section>
-      </aside>
-    </div>
-  </section>
-</main>
-<footer><span>MIDNIGHT</span><span>당신의 한 표가 밤을 바꿉니다.</span></footer>
-<dialog id="rules"><div class="dialog-heading"><h2>도시의 규칙</h2><button id="rules-close" class="button subtle">닫기</button></div>
-  <p>4~12명이 모이면 방장이 시작합니다. 방장을 제외한 전원이 준비 완료 상태여야 합니다. 정원을 다 채울 필요는 없습니다.</p>
-  <ol><li><b>낮 토론 → 투표 → 밤 행동</b> 순서로 반복합니다. 시간은 방 생성 시 설정하며 기본 토론 90초, 투표·밤 각 30초입니다.</li><li>처형은 <b>생존자 과반수</b> 득표가 필요합니다. 동률·과반수 미달이면 처형하지 않으며, 미투표는 기권입니다.</li><li><b>마피아</b>는 밤에 동료끼리 대화하고 공격 대상을 선택합니다. 최다 선택 대상을 공격하며 동률·전원 미선택이면 공격하지 않습니다.</li><li><b>의사</b>는 한 명을 보호합니다. 자신도, 같은 사람을 연속해서도 보호할 수 있습니다. <b>경찰</b>은 자신을 제외한 한 명의 마피아 여부를 확인합니다.</li><li>선택은 제한 시간까지 변경할 수 있습니다. 밤 행동은 동시에 처리하며, 사망자의 직업은 마지막에 공개됩니다.</li><li>마피아를 모두 처치하면 시민팀 승리. 생존 마피아가 시민팀 이상이면 마피아팀 승리입니다.</li><li>마피아 최대: 4~6인 1명 / 7~9인 2명 / 10~12인 3명. 경찰은 10인부터 최대 2명, 의사는 8인부터 최대 2명이며 그 이하는 최대 1명입니다. 경찰+의사는 마피아 수+1명 이하, 일반 시민은 최소 1명입니다. 경찰·의사는 0명도 가능합니다.</li><li>사망자는 낮에 사망자끼리만 채팅합니다. 밤에는 생존 마피아만 채팅할 수 있습니다.</li><li>연결이 8초 이상 확인되지 않으면 생존자의 복귀를 기다리며 일시정지합니다. 기본 30초 유예 후 이탈 처리합니다. 이탈 후 4인 이상·양 진영 존재·마피아 열세를 모두 유지하면 계속하고, 아니면 무효 종료합니다. 직접 나가기는 즉시 이탈입니다.</li><li>서버 진행 확인이 15초 넘게 멈추면 무효 종료합니다. 같은 세션으로 유예 시간 안에 돌아오면 복귀합니다.</li></ol>
-  <p class="hint">회원가입은 없지만 브라우저의 세션 쿠키로 참가자를 구분합니다. 쿠키를 지우면 기존 역할로 복귀할 수 없습니다. 모바일에서 앱 전환·절전 시 연결이 끊길 수 있습니다.</p>
-</dialog>
-</body>
+      <section id="game" hidden>
+        <div class="room-heading">
+          <div>
+            <p class="eyebrow" id="room-code-label"></p>
+            <h1 id="game-title"></h1>
+          </div>
+          <div class="room-actions">
+            <button id="invite" class="button secondary">초대 링크 복사</button
+            ><button id="leave" class="button subtle danger">나가기</button>
+          </div>
+        </div>
+        <div id="pause-banner" class="pause-banner" role="status" hidden>
+          참가자의 재접속을 기다리고 있습니다. 게임 시간이 일시정지됩니다.
+        </div>
+        <div id="result" class="result" hidden>
+          <p class="eyebrow">GAME OVER</p>
+          <h2 id="result-title"></h2>
+          <p id="result-text"></p>
+        </div>
+        <section class="panel room-settings-panel">
+          <h2>이 방의 설정</h2>
+          <p id="room-settings-summary"></p>
+        </section>
+        <div class="game-grid">
+          <aside class="panel roster-panel">
+            <div class="section-heading">
+              <h2>참가자</h2>
+              <span id="player-count" class="count"></span>
+            </div>
+            <div id="roster"></div>
+            <p class="hint">사망한 참가자의 역할은 게임 종료 후 공개됩니다.</p>
+          </aside>
+          <section class="panel chat-panel">
+            <div class="phase-header">
+              <div>
+                <p id="round-label" class="eyebrow">게임 대기실</p>
+                <h2 id="phase-label">참가자를 기다리는 중</h2>
+              </div>
+              <div id="timer" class="timer">—</div>
+            </div>
+            <div class="phase-track">
+              <span data-phase="day">01 낮 토론</span
+              ><span data-phase="vote">02 투표</span
+              ><span data-phase="night">03 밤 행동</span>
+            </div>
+            <div class="chat-caption">
+              <b id="channel-name">대기실 채팅</b
+              ><span id="chat-permission" class="muted"></span>
+            </div>
+            <div
+              id="messages"
+              class="messages"
+              role="log"
+              aria-label="게임 채팅"
+              aria-live="polite"
+              aria-relevant="additions"
+            ></div>
+            <form id="chat-form" class="chat-form">
+              <label class="sr-only" for="message">메시지</label
+              ><input
+                id="message"
+                maxlength="300"
+                autocomplete="off"
+                placeholder="대화를 시작해 보세요"
+              /><button id="send" class="button primary" type="submit">
+                전송
+              </button>
+            </form>
+          </section>
+          <aside class="right-column">
+            <section id="role-card" class="panel role-card">
+              <p class="eyebrow">YOUR IDENTITY</p>
+              <h2 id="my-role">역할 배정 전</h2>
+              <p id="role-description"></p>
+            </section>
+            <section class="panel action-panel">
+              <h2 id="action-title">게임 준비</h2>
+              <p id="action-help" class="muted"></p>
+              <div id="targets"></div>
+              <div id="room-controls"></div>
+            </section>
+            <section id="reports-panel" class="panel" hidden>
+              <h2>나의 수사 기록</h2>
+              <div id="reports"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <span>MIDNIGHT</span><span>당신의 한 표가 밤을 바꿉니다.</span>
+    </footer>
+    <dialog id="rules">
+      <div class="dialog-heading">
+        <h2>도시의 규칙</h2>
+        <button id="rules-close" class="button subtle">닫기</button>
+      </div>
+      <p>
+        4~12명이 모이면 방장이 시작합니다. 방장을 제외한 전원이 준비 완료
+        상태여야 합니다. 정원을 다 채울 필요는 없습니다.
+      </p>
+      <ol>
+        <li>
+          <b>낮 토론 → 투표 → 밤 행동</b> 순서로 반복합니다. 시간은 방 생성 시
+          설정하며 기본 토론 90초, 투표·밤 각 30초입니다.
+        </li>
+        <li>
+          처형은 <b>생존자 과반수</b> 득표가 필요합니다. 동률·과반수 미달이면
+          처형하지 않으며, 미투표는 기권입니다.
+        </li>
+        <li>
+          <b>마피아</b>는 밤에 동료끼리 대화하고 공격 대상을 선택합니다. 최다
+          선택 대상을 공격하며 동률·전원 미선택이면 공격하지 않습니다.
+        </li>
+        <li>
+          <b>의사</b>는 한 명을 보호합니다. 자신도, 같은 사람을 연속해서도
+          보호할 수 있습니다. <b>경찰</b>은 자신을 제외한 한 명의 마피아 여부를
+          확인합니다.
+        </li>
+        <li>
+          선택은 제한 시간까지 변경할 수 있습니다. 밤 행동은 동시에 처리하며,
+          사망자의 직업은 마지막에 공개됩니다.
+        </li>
+        <li>
+          마피아를 모두 처치하면 시민팀 승리. 생존 마피아가 시민팀 이상이면
+          마피아팀 승리입니다.
+        </li>
+        <li>
+          마피아 최대: 4~6인 1명 / 7~9인 2명 / 10~12인 3명. 경찰은 10인부터 최대
+          2명, 의사는 8인부터 최대 2명이며 그 이하는 최대 1명입니다. 경찰+의사는
+          마피아 수+1명 이하, 일반 시민은 최소 1명입니다. 경찰·의사는 0명도
+          가능합니다.
+        </li>
+        <li>
+          사망자는 낮에 사망자끼리만 채팅합니다. 밤에는 생존 마피아만 채팅할 수
+          있습니다.
+        </li>
+        <li>
+          연결이 8초 이상 확인되지 않으면 생존자의 복귀를 기다리며
+          일시정지합니다. 기본 30초 유예 후 이탈 처리합니다. 이탈 후 4인 이상·양
+          진영 존재·마피아 열세를 모두 유지하면 계속하고, 아니면 무효
+          종료합니다. 직접 나가기는 즉시 이탈입니다.
+        </li>
+        <li>
+          서버 진행 확인이 15초 넘게 멈추면 무효 종료합니다. 같은 세션으로 유예
+          시간 안에 돌아오면 복귀합니다.
+        </li>
+      </ol>
+      <p class="hint">
+        회원가입은 없지만 브라우저의 세션 쿠키로 참가자를 구분합니다. 쿠키를
+        지우면 기존 역할로 복귀할 수 없습니다. 모바일에서 앱 전환·절전 시 연결이
+        끊길 수 있습니다.
+      </p>
+    </dialog>
+  </body>
 </html>

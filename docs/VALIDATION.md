@@ -1,8 +1,28 @@
 # 검증 결과
 
-이 문서는 제공된 소스에서 직접 실행한 검증과 실행하지 못한 검증을 구분합니다.
+이 문서는 **현재 리팩토링 결과에서 직접 실행한 검증**과, 원본 프로젝트에 기록되어 있던 이전 검증을 구분합니다.
 
-## 직접 실행
+## 2026-09-23 리팩토링 후 직접 실행
+
+- `python -m compileall -q game config scripts`: Python 문법 검사 통과
+- `node --check game/static/game/app.js`: JavaScript 문법 검사 통과
+- 순수 `game/domain/` 스모크 테스트: 방 생성, 시작, 단계 시간, 밤 채팅 권한, 비공개 채팅 필터링, `sender_id` 기록 확인 통과
+- `game/tests.py`에 **내 채팅 판별용 sender_id 회귀 테스트 1개**를 추가하여 현재 테스트 메서드는 총 59개입니다.
+
+### 현재 환경에서 다시 실행하지 못한 검증
+
+- `python scripts/test_local.py`: 현재 작업 환경에 Django가 설치되어 있지 않아 실행하지 못했습니다.
+- `pip install -r requirements-base.txt`: 작업 환경의 외부 네트워크/DNS가 막혀 Django 패키지를 내려받지 못했습니다.
+- Docker/MySQL 검증: 현재 작업 환경에 Docker가 없어 실행하지 못했습니다.
+
+따라서 이번 리팩토링에 대해서는 **문법 검사와 순수 도메인 동작 검증까지 직접 완료**했고, Django HTTP/API 전체 회귀 테스트와 MySQL 동시성 테스트는 사용자의 개발 환경 또는 GitHub Actions에서 다시 실행해야 합니다.
+
+## 원본 프로젝트에서 기록되어 있던 검증
+
+아래 내용은 리팩토링 전 `docs/VALIDATION.md`에 기록되어 있던 검증 이력입니다. 구조 변경 이후의 재검증 결과로 간주하면 안 됩니다.
+
+### 당시 직접 실행
+
 
 - Django 시스템 검사: 오류 0개
 - 정적 파일 수집: CSS/JS 수집 및 해시/압축 처리 성공
